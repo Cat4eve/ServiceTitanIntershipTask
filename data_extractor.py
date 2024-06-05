@@ -15,6 +15,8 @@ class DataExtractor:
 
         # Conversion for invoice item types
         self.type_conversation = {0: 'Material', 1: 'Equipment', 2: 'Service', 3: 'Other'}
+
+        # Conversion for symbolic mistakes made by reading device
         self.word_to_num_map = {
             'O': 0,
             'zero': 0,
@@ -83,10 +85,14 @@ class DataExtractor:
 
     # Transformation of data from s
     def _transform_to_flat_data(self) -> None:
+        
+        # Creation of dictionary which will be converted to dataframe
         dictionary_to_be_convereted_to_dataframe = {'invoice_id': None,'created_on': None,'invoiceitem_id': None,
                                                     'invoiceitem_name': None,'type': None,'unit_price': None,'total_price': None,
                                                     'percentage_in_invoice': None,'is_expired': None}
         
+
+        # Creation of respective arrays for computaions
         invoice_id_arr = []
         created_on_arr = []
         invoice_item_id_arr = []
@@ -96,15 +102,21 @@ class DataExtractor:
         invoice_item_total_price = []
         is_expired_arr = []
         
+        # Iteration over all invoices
         for item in self.extracted_data:
+
+            # Removing ones with invalid dates
             if self._is_not_valid_date(item['created_on']):
                 continue
 
+            # not considering one which does not have any item on them
             if ('items' not in item):
                 continue
             
+            # iterating over invoice items
             for invoice_item in item['items']:
-                print(invoice_item)
+
+                # removing O for invoice id
                 if str(item['id'])[-1] == 'O':
                     invoice_id_integer = item['id'][:-1]
                 else:
@@ -114,6 +126,8 @@ class DataExtractor:
                 created_on_arr.append(item['created_on'])
                 invoice_item_id_arr.append(invoice_item['item']['id'])
                 invoice_item_name_arr.append(invoice_item['item']['name'])
+
+                # replacing typo in type
                 if (self._is_not_valid_number(invoice_item['item']['type'])):
                     type = self.word_to_num_map[invoice_item['item']['type']]
                 else:
@@ -121,20 +135,21 @@ class DataExtractor:
                 invoice_item_type_arr.append(type)
 
                 invoice_item_unit_price.append(int(invoice_item['item']['unit_price']))
+
+                # replacing typo in quantity
                 if (self._is_not_valid_number(invoice_item['quantity'])):
                     quantity = self.word_to_num_map[invoice_item['quantity']]
                 else:
                     quantity = int(invoice_item['quantity'])
                 invoice_item_total_price.append(int(invoice_item['item']['unit_price'])*quantity)
 
-                # percentage_in_invoice.append(float())
-
+                # calculation of expired items
                 if invoice_id_integer in self.expired_list:
                     is_expired_arr.append(True)
                 else:
                     is_expired_arr.append(False)
 
-        
+        # Calculation of percentages
         full_price_per_invoice = []
         for i, item in enumerate(invoice_id_arr):
             sum = 0
@@ -143,8 +158,7 @@ class DataExtractor:
                     sum += invoice_item_total_price[index]
             full_price_per_invoice.append(float(invoice_item_total_price[i]/sum))
 
-        
-
+        # respectinve ordering
         dictionary_to_be_convereted_to_dataframe['invoice_id'] = invoice_id_arr
         dictionary_to_be_convereted_to_dataframe['created_on'] = created_on_arr
         dictionary_to_be_convereted_to_dataframe['invoiceitem_id'] = invoice_item_id_arr
@@ -155,17 +169,21 @@ class DataExtractor:
         dictionary_to_be_convereted_to_dataframe['percentage_in_invoice'] = full_price_per_invoice
         dictionary_to_be_convereted_to_dataframe['is_expired'] = is_expired_arr
 
+        # conversion
         data_frame = pd.DataFrame(data=dictionary_to_be_convereted_to_dataframe)
 
         data_frame['invoice_id'] = pd.to_numeric(data_frame['invoice_id'])
         data_frame['created_on'] = pd.to_datetime(data_frame['created_on'])
 
+        # soring
         data_frame = data_frame.sort_values(["invoice_id", "invoiceitem_id"], ascending=[True, True])
 
+        # extraction 
         data_frame.to_csv('Data_Extraction_Results.csv')
         return data_frame
     
 
+    #helper methods
 
     def _is_not_valid_date(self, date: str):
         try:
